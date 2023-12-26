@@ -45,27 +45,30 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- Part 2
 
--- TODO: Define the types Aexp, Bexp, Stm and Program
-data Aexp = AddA Aexp Aexp | MultA Aexp Aexp | SubA Aexp Aexp | Num Integer --Este tipos são da linguagem high level
-data Bexp = EqualA Aexp Aexp | EqualB Bexp Bexp | LessEqual Aexp Aexp | AndB Bexp Bexp | NegB Bexp | TrueB | FalseB
+-- TODO: Define the types NumExp, BoolExp, Stm and Program
 
-compA :: Aexp -> Code
-compA (AddA a1 a2) = (compA a1) ++ (compA a2) ++ [Add]
-compA (MultA a1 a2) = (compA a1) ++ (compA a2) ++ [Mult]
-compA (SubA a1 a2) = (compA a1) ++ (compA a2) ++ [Sub]
-compA (Num a1) = [Push a1]
+data NumExp = AddLit NumExp NumExp | MultLit NumExp NumExp | SubLit NumExp NumExp | NumLit Integer deriving (Show)--Este tipos são da linguagem high level
+data BoolExp = EqualNumLit NumExp NumExp | EqualBoolLit BoolExp BoolExp | LessEqualLit NumExp NumExp | AndLit BoolExp BoolExp | NegLit BoolExp | TrueLit | FalseLit deriving (Show)
+-- data NumExp = NumExp | BoolExp
+type Program = [NumExp]
 
-compB :: Bexp -> Code
-compB (EqualA a1 a2) = (compA a1) ++ (compA a2) ++ [Equ]
-compB (EqualB b1 b2) = (compB b1) ++ (compB b2) ++ [Equ]
-compB (LessEqual a1 a2) = (compA a1) ++ (compA a2) ++ [Le]
-compB (AndB b1 b2) = (compB b1) ++ (compB b2) ++ [And]
-compB (NegB b1) = (compB b1) ++ [Neg]
-compB (TrueB) = [Tru]
-compB (FalseB) = [Fals]
+compNum :: NumExp -> Code
+compNum (AddLit a1 a2) = (compNum a1) ++ (compNum a2) ++ [Add]
+compNum (MultLit a1 a2) = (compNum a1) ++ (compNum a2) ++ [Mult]
+compNum (SubLit a1 a2) = (compNum a1) ++ (compNum a2) ++ [Sub]
+compNum (NumLit a1) = [Push a1]
+
+compBool :: BoolExp -> Code
+compBool (EqualNumLit a1 a2) = (compNum a1) ++ (compNum a2) ++ [Equ]
+compBool (EqualBoolLit b1 b2) = (compBool b1) ++ (compBool b2) ++ [Equ]
+compBool (LessEqualLit a1 a2) = (compNum a1) ++ (compNum a2) ++ [Le]
+compBool (AndLit b1 b2) = (compBool b1) ++ (compBool b2) ++ [And]
+compBool (NegLit b1) = (compBool b1) ++ [Neg]
+compBool (TrueLit) = [Tru]
+compBool (FalseLit) = [Fals]
 
 --compile :: Program -> Code
---compile = compB (Code)
+--compile = compBool (Code)
 
 data Token
   = PlusTok
@@ -89,7 +92,7 @@ data Token
   | AndTok
   | BoolEqTok
   | DelimTok
-  | IntTok Int
+  | IntTok Integer
   | VarTok String
   deriving (Show)
 
@@ -117,11 +120,16 @@ lexNum :: String -> [Token]
 lexNum cs = IntTok (read num) : lexer rest
                   where (num, rest) = span isDigit cs
 
+lexNegNum :: String -> [Token]
+lexNegNum cs = IntTok (-(read num)) : lexer rest
+                  where (num, rest) = span isDigit cs
+
 lexSymbol :: String -> [Token]
 lexSymbol ('=':'=':cs) = IntEqTok : lexer cs
 lexSymbol (':':'=':cs) = AtrTok : lexer cs
 lexSymbol ('<':'=':cs) = LessEqTok : lexer cs
 lexSymbol ('>':'=':cs) = GreaterEqTok : lexer cs
+lexSymbol ('(':'-':cs) = OpenParTok : lexNegNum cs
 lexSymbol (c:cs) = case (c) of
                         ('<') -> LessTok : lexer cs
                         ('>') -> GreaterTok : lexer cs
@@ -133,10 +141,46 @@ lexSymbol (c:cs) = case (c) of
                         ('(') -> OpenParTok : lexer cs
                         (')') -> CloseParTok : lexer cs
                         (';') -> DelimTok : lexer cs
+                        where (d:ds) = cs
 
 
--- parse :: String -> Program
-parse = undefined -- TODO
+
+parse :: [Token] -> NumExp
+parse tokens =
+  case parseSumOrProdOrIntOrPar tokens of
+    Just (expr, []) -> expr
+    _ -> error "Parse error"
+
+parseIntOrParenExpr :: [Token] -> Maybe (NumExp, [Token])
+parseIntOrParenExpr (IntTok n : restTokens)
+  = Just (NumLit n, restTokens)
+parseIntOrParenExpr (OpenParTok : restTokens1)
+  = case parseSumOrProdOrIntOrPar restTokens1 of
+    Just (expr, (CloseParTok : restTokens2)) ->
+      Just (expr, restTokens2)
+    Just _ -> Nothing -- TODO: Error no closing paren 
+    Nothing -> Nothing -- TODO: Error
+parseIntOrParenExpr tokens = Nothing
+
+parseProdOrIntOrPar :: [Token] -> Maybe (NumExp, [Token])
+parseProdOrIntOrPar tokens
+  = case parseIntOrParenExpr tokens of
+    Just (expr1, (TimesTok : restTokens1)) ->
+      case parseProdOrIntOrPar restTokens1 of
+        Just (expr2, restTokens2) ->
+          Just (MultLit expr1 expr2, restTokens2)
+        Nothing -> Nothing -- TODO: Error
+    result -> result
+
+parseSumOrProdOrIntOrPar::[Token] -> Maybe (NumExp, [Token])
+parseSumOrProdOrIntOrPar tokens
+  = case parseProdOrIntOrPar tokens of
+    Just (expr1, (PlusTok : restTokens1)) ->
+      case parseSumOrProdOrIntOrPar restTokens1 of
+        Just (expr2, restTokens2) ->
+          Just (AddLit expr1 expr2, restTokens2)
+        Nothing -> Nothing
+    result -> result
 
 -- To help you test your parser
 --testParser :: String -> (String, String)
