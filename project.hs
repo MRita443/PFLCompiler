@@ -65,11 +65,17 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- TODO: Define the types NumExp, BoolExp, Stm and Program
 
-data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Integer | VarLit String deriving (Show) -- Este tipos são da linguagem high level
+newtype VarLiteral = VarLit String deriving (Show)
+
+data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Integer | VarLiteral deriving (Show) -- Este tipos são da linguagem high level
 
 data Bexp = IntEqLit Aexp Aexp | BoolEqLit Bexp Bexp | LessEqLit Aexp Aexp | AndLit Bexp Bexp | NegLit Bexp | TrueLit | FalseLit deriving (Show)
 
-data Stm = NumExp Aexp | BoolExp Bexp
+data Exp = ArithmeticExp Aexp | BooleanExp Bexp deriving (Show)
+
+data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrLit VarLiteral Exp deriving (Show)
+
+-- TODO: Switch Aexps for parseA
 
 type Program = [Stm]
 
@@ -190,21 +196,13 @@ parseA tokens =
     Just (expr, []) -> expr
     _ -> error "Parse error"
 
-parsePar :: [Token] -> Maybe (Aexp, [Token])
-parsePar tokens =
-  case parseSum tokens of
-    Just (expr, CloseParTok : restTokens2) ->
-      Just (expr, restTokens2)
-    Just x -> trace ("parsePar: " ++ show x ++ "\n") Nothing -- TODO: Error no closing paren
-    Nothing -> Nothing
-
 parseIntPar :: [Token] -> Maybe (Aexp, [Token])
 parseIntPar (IntTok n : restTokens) = Just (NumLit n, restTokens)
 parseIntPar (OpenParTok : restTokens1) =
   case parseSum restTokens1 of
     Just (expr, CloseParTok : restTokens2) ->
       Just (expr, restTokens2)
-    Just x -> trace ("parseIntPar: " ++ show x) Nothing -- TODO: Error no closing paren
+    Just x -> trace ("parseIntPar: " ++ show x) error "Syntax Error: Missing closing parenthesis" -- TODO: Error no closing paren
     Nothing -> Nothing
 parseIntPar tokens = trace (show tokens) Nothing
 
@@ -235,7 +233,7 @@ parseLessOrIntEq (OpenParTok : restTokens) =
   case parseAnd restTokens of
     Just (expr, CloseParTok : restTokens2) ->
       Just (expr, restTokens2)
-    Just x -> trace ("parsePar: " ++ show x ++ "\n") Nothing -- TODO: Error no closing paren
+    Just x -> trace ("parsePar: " ++ show x ++ "\n") error "Syntax Error: Missing closing parenthesis" -- TODO: Error no closing paren
     Nothing -> Nothing
 parseLessOrIntEq tokens =
   case parseSum tokens of
@@ -251,17 +249,17 @@ parseLessOrIntEq tokens =
         Nothing -> Nothing
     result -> trace ("parseLessOrIntEq: " ++ show result ++ "\n") Nothing
 
-parseNot :: [Token] -> Maybe (Bexp, [Token])
-parseNot (NegTok : restTokens) =
+parseNeg :: [Token] -> Maybe (Bexp, [Token])
+parseNeg (NegTok : restTokens) =
   case parseLessOrIntEq restTokens of
     Just (expr1, restTokens1) ->
       Just (NegLit expr1, restTokens1)
-    result -> trace ("parseNot: " ++ show result ++ "\n") result
-parseNot tokens = parseLessOrIntEq tokens
+    result -> trace ("parseNeg: " ++ show result ++ "\n") result
+parseNeg tokens = parseLessOrIntEq tokens
 
 parseBoolEq :: [Token] -> Maybe (Bexp, [Token])
 parseBoolEq tokens =
-  case parseNot tokens of
+  case parseNeg tokens of
     Just (expr1, BoolEqTok : restTokens1) ->
       case parseBoolEq restTokens1 of
         Just (expr2, restTokens2) ->
@@ -278,6 +276,34 @@ parseAnd tokens =
           Just (AndLit expr1 expr2, restTokens2)
         Nothing -> Nothing
     result -> trace ("parseAnd: " ++ show result ++ "\n") result
+
+-- TODO: Make it so statements can contain other statements
+parseStatement :: [Token] -> Maybe (Stm, [Token])
+parseStatement (WhileTok : restTokens) =
+  -- Could have chosen to enforce the need for parentheses after while and do, but chose not to
+  case parseAnd restTokens of
+    Just (expr1, DoTok : restTokens1) ->
+      case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
+        Just (expr2, restTokens2) ->
+          Just (WhileLit expr1 expr2, restTokens2)
+        Nothing -> Nothing
+    result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+parseStatement (IfTok : restTokens) =
+  -- Could have chosen to enforce the need for parentheses after if, else and then, but chose not to
+  case parseAnd restTokens of
+    Just (expr1, ThenTok : restTokens1) ->
+      case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
+        Just (expr2, ElseTok : restTokens2) ->
+          case parseSum restTokens2 of
+            Just (expr3, restTokens3) ->
+              Just (IfLit expr1 expr2 (Just expr3), restTokens3)
+            Nothing ->  trace "parseStatement: AfterThen \n" Nothing
+        Just (expr2, restTokens2) ->
+          Just (IfLit expr1 expr2 Nothing, restTokens2)
+        Nothing -> trace "parseStatement: AfterThen \n" Nothing
+    result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+
+-- TODO: Ver caso em que só se fornece um parenteses de fecho
 
 -- To help you test your parser
 -- testParser :: String -> (String, String)
