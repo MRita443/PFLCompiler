@@ -27,22 +27,30 @@ data Inst
 
 type Code = [Inst]
 
-type Stack = [Int]
+-- TODO: tipo stack e state tem de ser "integer, tt ou ff" e o print do state tem q tar ordernado por ordem alfabetica
+type Stack = [Integer]
 
 createEmptyStack :: Stack
 createEmptyStack = []
 
--- stack2Str :: Stack -> String
-stack2Str = undefined -- TODO, Uncomment all the other function type declarations as you implement them
+stack2Str :: Stack -> String
+stack2Str [x] = show x
+stack2Str (x:xs) = show x ++ "," ++ stack2Str xs
 
--- createEmptyState :: State
-createEmptyState = undefined -- TODO, Uncomment the function signature after defining State
+type State = [(String, Integer)]
 
--- state2Str :: State -> String
-state2Str = undefined -- TODO
+createEmptyState :: State
+createEmptyState = []
 
--- run :: (Code, Stack, State) -> (Code, Stack, State)
-run = undefined -- TODO
+state2Str :: State -> String
+state2Str [(variable, value)] = variable ++ "=" ++ show value
+state2Str ((variable, value):xs) = variable ++ "=" ++ show value ++ "," ++ state2Str xs
+
+-- TODO: Acrescentar os restantes tipos de codigo ao run
+
+run :: (Code, Stack, State) -> (Code, Stack, State)
+run ([], stack, state) = ([], stack, state)
+run ((Push n:xs), stack, state) = run (xs, n:stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
