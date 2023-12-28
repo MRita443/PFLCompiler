@@ -35,7 +35,7 @@ createEmptyStack = []
 
 stack2Str :: Stack -> String
 stack2Str [x] = show x
-stack2Str (x:xs) = show x ++ "," ++ stack2Str xs
+stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
 
 type State = [(String, Integer)]
 
@@ -44,13 +44,13 @@ createEmptyState = []
 
 state2Str :: State -> String
 state2Str [(variable, value)] = variable ++ "=" ++ show value
-state2Str ((variable, value):xs) = variable ++ "=" ++ show value ++ "," ++ state2Str xs
+state2Str ((variable, value) : xs) = variable ++ "=" ++ show value ++ "," ++ state2Str xs
 
 -- TODO: Acrescentar os restantes tipos de codigo ao run
 
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
-run ((Push n:xs), stack, state) = run (xs, n:stack, state)
+run ((Push n : xs), stack, state) = run (xs, n : stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
@@ -79,9 +79,7 @@ data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Int
 
 data Bexp = IntEqLit Aexp Aexp | BoolEqLit Bexp Bexp | LessEqLit Aexp Aexp | AndLit Bexp Bexp | NegLit Bexp | TrueLit | FalseLit deriving (Show)
 
-data Exp = ArithmeticExp Aexp | BooleanExp Bexp deriving (Show)
-
-data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrLit VarLiteral Exp deriving (Show)
+data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrALit VarLiteral Aexp | AtrBLit VarLiteral Bexp deriving (Show)
 
 -- TODO: Switch Aexps for parseA
 
@@ -305,11 +303,19 @@ parseStatement (IfTok : restTokens) =
           case parseSum restTokens2 of
             Just (expr3, restTokens3) ->
               Just (IfLit expr1 expr2 (Just expr3), restTokens3)
-            Nothing ->  trace "parseStatement: AfterThen \n" Nothing
+            Nothing -> trace "parseStatement: AfterThen \n" Nothing
         Just (expr2, restTokens2) ->
           Just (IfLit expr1 expr2 Nothing, restTokens2)
         Nothing -> trace "parseStatement: AfterThen \n" Nothing
     result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+parseStatement (VarTok x : AtrTok : restTokens) =
+  case parseSum restTokens of
+    Just (expr1, restTokens1) ->
+      Just (AtrALit (VarLit x) expr1, restTokens1)
+    _ -> case parseAnd restTokens of
+      Just (expr2, restTokens2) ->
+        Just (AtrBLit (VarLit x) expr2, restTokens2)
+      result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
 
 -- TODO: Ver caso em que só se fornece um parenteses de fecho
 
