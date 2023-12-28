@@ -109,7 +109,7 @@ data Token
   | LessEqTok
   | GreaterTok
   | GreaterEqTok
-  | NotTok
+  | NegTok
   | AndTok
   | BoolEqTok
   | TrueTok
@@ -134,7 +134,7 @@ lexWord cs = case span isAlpha cs of
   ("else", rest) -> ElseTok : lexer rest
   ("while", rest) -> WhileTok : lexer rest
   ("do", rest) -> DoTok : lexer rest
-  ("not", rest) -> NotTok : lexer rest
+  ("not", rest) -> NegTok : lexer rest
   ("and", rest) -> AndTok : lexer rest
   ("True", rest) -> TrueTok : lexer rest
   ("False", rest) -> FalseTok : lexer rest
@@ -252,7 +252,7 @@ parseLessOrIntEq tokens =
     result -> trace ("parseLessOrIntEq: " ++ show result ++ "\n") Nothing
 
 parseNot :: [Token] -> Maybe (Bexp, [Token])
-parseNot (NotTok : restTokens) =
+parseNot (NegTok : restTokens) =
   case parseLessOrIntEq restTokens of
     Just (expr1, restTokens1) ->
       Just (NegLit expr1, restTokens1)
