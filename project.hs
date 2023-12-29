@@ -2,9 +2,9 @@ module Project where
 
 import Data.Char
 import Data.Either
-import Debug.Trace
-import Data.List (sortBy)
 import Data.Function (on)
+import Data.List (sortBy)
+import Debug.Trace
 
 -- PFL 2023/24 - Haskell practical assignment quickstart
 -- Updated on 27/12/2023
@@ -36,6 +36,7 @@ data Const
   = Int Integer
   | TT
   | FF
+
 instance Show Const where
   show (Int a) = show a
   show TT = "True"
@@ -48,14 +49,14 @@ createEmptyStack = []
 
 stack2Str :: Stack -> String
 stack2Str [x] = show x
-stack2Str (x : xs) =  show x ++ "," ++ stack2Str xs
+stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
 
 type State = [(String, Const)]
 
 createEmptyState :: State
 createEmptyState = []
 
-mySort :: Ord a => [(a, b)] -> [(a, b)]
+mySort :: (Ord a) => [(a, b)] -> [(a, b)]
 mySort = sortBy (compare `on` fst)
 
 state2Str :: State -> String
@@ -94,7 +95,6 @@ run (And : xs, FF : FF : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, TT : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, FF : stack, state) = run (xs, TT : stack, state)
 
-
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
@@ -126,7 +126,7 @@ data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Int
 
 data Bexp = IntEqLit Aexp Aexp | BoolEqLit Bexp Bexp | LessEqLit Aexp Aexp | AndLit Bexp Bexp | NegLit Bexp | TrueLit | FalseLit deriving (Show)
 
-data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrLit String (Either Aexp Bexp) deriving (Show)
+data Stm = WhileLit Bexp [Stm] | IfLit Bexp [Stm] (Maybe [Stm]) | AtrLit String (Either Aexp Bexp) deriving (Show)
 
 type Program = [Stm]
 
@@ -176,7 +176,7 @@ data Token
   | DelimTok
   | IntTok Integer
   | VarTok String
-  deriving (Show)
+  deriving (Show, Eq)
 
 lexer :: String -> [Token]
 lexer [] = []
@@ -334,44 +334,66 @@ parseAnd tokens =
         Nothing -> Nothing
     result -> trace ("parseAnd: " ++ show result ++ "\n") result
 
--- TODO: Make it so statements can contain other statements
+parseElse :: [Token] -> Bexp -> [Stm] -> Maybe (Stm, [Token])
+parseElse tokens boolExpr thenStms =
+  case parseStatements tokens of
+    Just (elseStms, DelimTok : restTokens1) ->
+      Just (IfLit boolExpr thenStms (Just elseStms), restTokens1)
+    Just (elseStms, restTokens2) ->
+      if length elseStms == 1
+        then Just (IfLit boolExpr thenStms (Just elseStms), restTokens2) -- If there is only one statement inside else, we do not need an else specific delimiter
+        else error "Syntax Error: Missing delimiter after else statement" -- If there is more than one statement, it is an error
+    Nothing -> trace "parseStatement: AfterElse \n" Nothing
+
+parseThen :: [Token] -> Bexp -> Maybe (Stm, [Token])
+parseThen tokens boolExpr =
+  case parseStatements tokens of
+    Just (thenStms, DelimTok : ElseTok : restTokens) ->
+      -- There is an Else after Then
+      parseElse restTokens boolExpr thenStms
+    Just (thenStms, ElseTok : restTokens) ->
+      parseElse restTokens boolExpr thenStms
+    Just (thenStms, DelimTok : restTokens) ->
+      -- There is no Else after Then
+      Just (IfLit boolExpr thenStms Nothing, restTokens)
+    Just (thenStms, restTokens) ->
+      if length thenStms == 1
+        then Just (IfLit boolExpr thenStms Nothing, restTokens) -- If there is only one statement inside then, we do not need a do specific delimiter
+        else error "Syntax Error: Missing delimiter after then statement" -- If there is more than one statement, it is an error
+    Nothing -> trace ("parseStatement: AfterThen " ++ show tokens ++ "\n") Nothing
+
 parseStatement :: [Token] -> Maybe (Stm, [Token])
 parseStatement (WhileTok : restTokens) =
   -- Could have chosen to enforce the need for parentheses after while and do, but chose not to
   case parseAnd restTokens of
-    Just (expr1, DoTok : restTokens1) ->
-      case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
-        Just (expr2, DelimTok : restTokens2) ->
-          Just (WhileLit expr1 expr2, restTokens2)
-        Just _ -> error "Syntax Error: Missing delimiter after while...do statement"
-        Nothing -> trace "here" Nothing
+    Just (boolExpr, DoTok : restTokens1) ->
+      case parseStatements restTokens1 of
+        Just (doStms, DelimTok : restTokens2) ->
+          Just (WhileLit boolExpr doStms, restTokens2)
+        Just (doStms, restTokens2) ->
+          if length doStms == 1
+            then Just (WhileLit boolExpr doStms, restTokens2) -- If there is only one statement inside do, we do not need a do specific delimiter
+            else error "Syntax Error: Missing delimiter after while...do statement" -- If there is more than one statement, it is an error
+        Nothing -> Nothing
     Just _ -> error "Syntax Error: Missing do statement after while"
-    Nothing -> trace ("there" ++ show restTokens) Nothing
+    Nothing -> Nothing
 parseStatement (IfTok : restTokens) =
   -- Could have chosen to enforce the need for parentheses after if, else and then, but chose not to
   case parseAnd restTokens of
-    Just (expr1, ThenTok : restTokens1) ->
-      case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
-        Just (expr2, DelimTok : ElseTok : restTokens2) ->
-          case parseSum restTokens2 of
-            Just (expr3, DelimTok : restTokens3) ->
-              Just (IfLit expr1 expr2 (Just expr3), restTokens3)
-            Nothing -> trace "parseStatement: AfterElse \n" Nothing
-        Just (expr2, DelimTok : restTokens2) ->
-          Just (IfLit expr1 expr2 Nothing, restTokens2)
-        Just _ -> error "Syntax Error: Missing delimiter after then statement"
-        Nothing -> trace ("parseStatement: AfterThen " ++ show restTokens1 ++ "\n") Nothing
-    result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+    Just (boolExpr, ThenTok : restTokens1) ->
+      parseThen restTokens1 boolExpr
+    result -> trace ("parseStatement: " ++ show result ++ "\n") error "Syntax Error: Missing then statement after if"
 parseStatement (VarTok x : AtrTok : restTokens) =
   case parseSum restTokens of
-    Just (expr1, DelimTok : restTokens1) ->
-      Just (AtrLit x (Left expr1), restTokens1)
+    Just (aExp, DelimTok : restTokens1) ->
+      Just (AtrLit x (Left aExp), restTokens1)
     Just y -> error "Syntax Error: Missing delimiter after attribution statement"
     _ -> case parseAnd restTokens of
-      Just (expr2, DelimTok : restTokens2) ->
-        Just (AtrLit x (Right expr2), restTokens2)
+      Just (bExp, DelimTok : restTokens2) ->
+        Just (AtrLit x (Right bExp), restTokens2)
       Just _ -> error "Syntax Error: Missing delimiter after attribution statement"
       Nothing -> Nothing
+parseStatement _ = error "Syntax Error: Invalid statement"
 
 -- | Recursive auxiliar function for parsing a block of multiple statements
 parseStatementsAux :: [Token] -> [Stm] -> Maybe ([Stm], [Token])
@@ -380,12 +402,16 @@ parseStatementsAux tokens currStms =
     Just (stms, CloseParTok : restTokens) ->
       -- Found the closing parenthesis delimiting the block's end
       Just (currStms ++ [stms], restTokens)
-    Just (stms1, restTokens1) -> parseStatementsAux restTokens1 (currStms ++ [stms1])
-    Nothing -> trace (show tokens) error "Syntax Error: Missing closing parenthesis after block of statements"
+    Just (stms1, restTokens1) -> trace ("parseStatementsAux: " ++ show restTokens1 ++ "\n") parseStatementsAux restTokens1 (currStms ++ [stms1])
+    Nothing -> Nothing
 
 -- | Parses a block of (possibly) multiple statements
 parseStatements :: [Token] -> Maybe ([Stm], [Token])
-parseStatements (OpenParTok : restTokens) = parseStatementsAux restTokens [] -- Parenthesis indicate a block of multiple statements
+parseStatements (OpenParTok : restTokens) =
+  -- Parenthesis indicate a block of multiple statements
+  if CloseParTok `elem` restTokens
+    then parseStatementsAux restTokens []
+    else error "Syntax Error: Missing closing parenthesis after block of statements"
 parseStatements tokens =
   -- Lack of parenthesis indicate a single statement
   case parseStatement tokens of
