@@ -2,9 +2,11 @@ module Project where
 
 import Data.Char
 import Data.Either
-import Data.Function (on)
-import Data.List (sortBy)
 import Debug.Trace
+import Data.List
+import Data.Function (on)
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 -- PFL 2023/24 - Haskell practical assignment quickstart
 -- Updated on 27/12/2023
@@ -48,27 +50,29 @@ createEmptyStack :: Stack
 createEmptyStack = []
 
 stack2Str :: Stack -> String
+stack2Str [] = ""
 stack2Str [x] = show x
-stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
+stack2Str (x : xs) =  show x ++ "," ++ stack2Str xs
 
-type State = [(String, Const)]
+type State = Map String Const
 
 createEmptyState :: State
-createEmptyState = []
-
-mySort :: (Ord a) => [(a, b)] -> [(a, b)]
-mySort = sortBy (compare `on` fst)
+createEmptyState = Map.empty
 
 state2Str :: State -> String
-state2Str [] = ""
-state2Str [(variable, Int x)] = variable ++ "=" ++ show x
-state2Str [(variable, TT)] = variable ++ "=True"
-state2Str [(variable, FF)] = variable ++ "=False"
-state2Str ((variable, Int x) : xs) = variable ++ "=" ++ show x ++ "," ++ state2Str xs
-state2Str ((variable, TT) : xs) = variable ++ "=True," ++ state2Str xs
-state2Str ((variable, FF) : xs) = variable ++ "=False," ++ state2Str xs
-
--- TODO: Acrescentar os restantes tipos de codigo ao run
+state2Str state
+    | Map.null state = ""
+    | otherwise = removeTrailingComma $ intercalate "," $ Map.foldrWithKey accumulate [] state
+    where
+        accumulate key value acc =
+            case value of
+                Int x -> (key ++ "=" ++ show x) : acc
+                TT -> (key ++ "=" ++ show TT) : acc
+                FF -> (key ++ "=" ++ show FF) : acc
+        removeTrailingComma str =
+            if not (null str) && last str == ','
+                then init str
+                else str
 
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
@@ -86,7 +90,7 @@ run (Equ : xs, TT : FF : stack, state) = run (xs, FF : stack, state)
 run (Equ : xs, FF : TT : stack, state) = run (xs, FF : stack, state)
 run (Equ : xs, FF : FF : stack, state) = run (xs, TT : stack, state)
 run (Le : xs, Int n1 : Int n2 : stack, state)
-  | n1 >= n2 = run (xs, TT : stack, state)
+  | n1 <= n2 = run (xs, TT : stack, state)
   | otherwise = run (xs, FF : stack, state)
 run (And : xs, TT : TT : stack, state) = run (xs, TT : stack, state)
 run (And : xs, TT : FF : stack, state) = run (xs, FF : stack, state)
@@ -94,6 +98,12 @@ run (And : xs, FF : TT : stack, state) = run (xs, FF : stack, state)
 run (And : xs, FF : FF : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, TT : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, FF : stack, state) = run (xs, TT : stack, state)
+run (Fetch x : xs, stack, state) = 
+    case Map.lookup x state of
+        Just val -> run (xs, val : stack, state)
+        Nothing -> error $ "Variable '" ++ x ++ "' not found in state"
+run (Store x : xs, val : stack, state) = run (xs, stack, Map.insert x val state)
+run (_, _, _) = error $ "Run-time error"
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
