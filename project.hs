@@ -36,7 +36,10 @@ data Const
   = Int Integer
   | TT
   | FF
-  deriving (Show)
+instance Show Const where
+  show (Int a) = show a
+  show TT = "True"
+  show FF = "False"
 
 type Stack = [Const]
 
@@ -44,13 +47,8 @@ createEmptyStack :: Stack
 createEmptyStack = []
 
 stack2Str :: Stack -> String
-stack2Str [] = ""
-stack2Str [Int x] = show x
-stack2Str [TT] = "True"
-stack2Str [FF] = "False"
-stack2Str (Int x : xs) = show x ++ "," ++ stack2Str xs
-stack2Str (TT : xs) = "True," ++ stack2Str xs
-stack2Str (FF : xs) = "False," ++ stack2Str xs
+stack2Str [x] = show x
+stack2Str (x : xs) =  show x ++ "," ++ stack2Str xs
 
 type State = [(String, Const)]
 
