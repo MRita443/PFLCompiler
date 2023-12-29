@@ -1,16 +1,33 @@
--- PFL 2023/24 - Haskell practical assignment quickstart
--- Updated on 27/12/2023
+module Project where
 
 import Data.Char
+import Data.Either
 import Debug.Trace
+
+-- PFL 2023/24 - Haskell practical assignment quickstart
+-- Updated on 27/12/2023
 
 -- Part 1
 
 -- Do not modify our definition of Inst and Code
-data Inst =
-  Push Integer | Add | Mult | Sub | Tru | Fals | Equ | Le | And | Neg | Fetch String | Store String | Noop |
-  Branch Code Code | Loop Code Code
-  deriving Show
+data Inst
+  = Push Integer
+  | Add
+  | Mult
+  | Sub
+  | Tru
+  | Fals
+  | Equ
+  | Le
+  | And
+  | Neg
+  | Fetch String
+  | Store String
+  | Noop
+  | Branch Code Code
+  | Loop Code Code
+  deriving (Show)
+
 type Code = [Inst]
 
 -- TODO: tipo stack e state tem de ser "integer, tt ou ff" e o print do state tem q tar ordernado por ordem alfabetica
@@ -36,12 +53,13 @@ state2Str ((variable, value) : xs) = variable ++ "=" ++ show value ++ "," ++ sta
 
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
-run ((Push n : xs), stack, state) = run (xs, n : stack, state)
+run (Push n : xs, stack, state) = run (xs, n : stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
-  where (_,stack,state) = run(code, createEmptyStack, createEmptyState)
+  where
+    (_, stack, state) = run (code, createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testAssembler [Push 10,Push 4,Push 3,Sub,Mult] == ("-10","")
@@ -64,13 +82,11 @@ testAssembler code = (stack2Str stack, state2Str state)
 
 -- TODO: Define the types Aexp, Bexp, Stm and Program
 
-newtype VarLiteral = VarLit String deriving (Show)
-
-data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Integer | VarLiteral deriving (Show) -- Este tipos são da linguagem high level
+data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Integer | VarLit String deriving (Show) -- Este tipos são da linguagem high level
 
 data Bexp = IntEqLit Aexp Aexp | BoolEqLit Bexp Bexp | LessEqLit Aexp Aexp | AndLit Bexp Bexp | NegLit Bexp | TrueLit | FalseLit deriving (Show)
 
-data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrALit VarLiteral Aexp | AtrBLit VarLiteral Bexp deriving (Show)
+data Stm = WhileLit Bexp Aexp | IfLit Bexp Aexp (Maybe Aexp) | AtrLit String (Either Aexp Bexp) deriving (Show)
 
 type Program = [Stm]
 
@@ -198,6 +214,7 @@ parseA tokens =
 
 parseIntPar :: [Token] -> Maybe (Aexp, [Token])
 parseIntPar (IntTok n : restTokens) = Just (NumLit n, restTokens)
+parseIntPar (VarTok x : restTokens) = Just (VarLit x, restTokens)
 parseIntPar (OpenParTok : restTokens1) =
   case parseSum restTokens1 of
     Just (expr, CloseParTok : restTokens2) ->
@@ -284,35 +301,58 @@ parseStatement (WhileTok : restTokens) =
   case parseAnd restTokens of
     Just (expr1, DoTok : restTokens1) ->
       case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
-        Just (expr2, restTokens2) ->
+        Just (expr2, DelimTok : restTokens2) ->
           Just (WhileLit expr1 expr2, restTokens2)
-        Nothing -> Nothing
-    result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+        Just _ -> error "Syntax Error: Missing delimiter after while...do statement"
+        Nothing -> trace "here" Nothing
+    Just _ -> error "Syntax Error: Missing do statement after while"
+    Nothing -> trace ("there" ++ show restTokens) Nothing
 parseStatement (IfTok : restTokens) =
   -- Could have chosen to enforce the need for parentheses after if, else and then, but chose not to
   case parseAnd restTokens of
     Just (expr1, ThenTok : restTokens1) ->
       case parseSum restTokens1 of -- TODO: Replace for function that parses a bunch of statements prob parseA
-        Just (expr2, ElseTok : restTokens2) ->
+        Just (expr2, DelimTok : ElseTok : restTokens2) ->
           case parseSum restTokens2 of
-            Just (expr3, restTokens3) ->
+            Just (expr3, DelimTok : restTokens3) ->
               Just (IfLit expr1 expr2 (Just expr3), restTokens3)
-            Nothing -> trace "parseStatement: AfterThen \n" Nothing
-        Just (expr2, restTokens2) ->
+            Nothing -> trace "parseStatement: AfterElse \n" Nothing
+        Just (expr2, DelimTok : restTokens2) ->
           Just (IfLit expr1 expr2 Nothing, restTokens2)
-        Nothing -> trace "parseStatement: AfterThen \n" Nothing
+        Just _ -> error "Syntax Error: Missing delimiter after then statement"
+        Nothing -> trace ("parseStatement: AfterThen " ++ show restTokens1 ++ "\n") Nothing
     result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
 parseStatement (VarTok x : AtrTok : restTokens) =
   case parseSum restTokens of
-    Just (expr1, restTokens1) ->
-      Just (AtrALit (VarLit x) expr1, restTokens1)
+    Just (expr1, DelimTok : restTokens1) ->
+      Just (AtrLit x (Left expr1), restTokens1)
+    Just y -> error "Syntax Error: Missing delimiter after attribution statement"
     _ -> case parseAnd restTokens of
-      Just (expr2, restTokens2) ->
-        Just (AtrBLit (VarLit x) expr2, restTokens2)
-      result -> trace ("parseStatement: " ++ show result ++ "\n") Nothing
+      Just (expr2, DelimTok : restTokens2) ->
+        Just (AtrLit x (Right expr2), restTokens2)
+      Just _ -> error "Syntax Error: Missing delimiter after attribution statement"
+      Nothing -> Nothing
+
+-- | Recursive auxiliar function for parsing a block of multiple statements
+parseStatementsAux :: [Token] -> [Stm] -> Maybe ([Stm], [Token])
+parseStatementsAux tokens currStms =
+  case parseStatement tokens of
+    Just (stms, CloseParTok : restTokens) ->
+      -- Found the closing parenthesis delimiting the block's end
+      Just (currStms ++ [stms], restTokens)
+    Just (stms1, restTokens1) -> parseStatementsAux restTokens1 (currStms ++ [stms1])
+    Nothing -> trace (show tokens) error "Syntax Error: Missing closing parenthesis after block of statements"
+
+-- | Parses a block of (possibly) multiple statements
+parseStatements :: [Token] -> Maybe ([Stm], [Token])
+parseStatements (OpenParTok : restTokens) = parseStatementsAux restTokens [] -- Parenthesis indicate a block of multiple statements
+parseStatements tokens =
+  -- Lack of parenthesis indicate a single statement
+  case parseStatement tokens of
+    Just (stm, restTokens) ->
+      Just ([stm], restTokens) -- We chose not to check for ; here in order to get more comprehensive error messages from the parseStatements function
 
 -- TODO: Ver caso em que só se fornece um parenteses de fecho
-
 
 -- To help you test your parser
 {- testParser :: String -> (String, String)
