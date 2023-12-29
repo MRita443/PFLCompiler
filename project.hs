@@ -3,6 +3,8 @@
 
 import Data.Char
 import Debug.Trace
+import Data.List (sortBy)
+import Data.Function (on)
 
 -- Part 1
 
@@ -13,30 +15,48 @@ data Inst =
   deriving Show
 type Code = [Inst]
 
--- TODO: tipo stack e state tem de ser "integer, tt ou ff" e o print do state tem q tar ordernado por ordem alfabetica
-type Stack = [Integer]
+data Const
+  = Int Integer
+  | TT
+  | FF
+  deriving (Show)
+
+type Stack = [Const]
 
 createEmptyStack :: Stack
 createEmptyStack = []
 
 stack2Str :: Stack -> String
-stack2Str [x] = show x
-stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
+stack2Str [] = "The stack is empty"
+stack2Str [Int x] = show x
+stack2Str [TT] = "True"
+stack2Str [FF] = "False"
+stack2Str (Int x : xs) = show x ++ "," ++ stack2Str xs
+stack2Str (TT : xs) = "True," ++ stack2Str xs
+stack2Str (FF : xs) = "False," ++ stack2Str xs
 
-type State = [(String, Integer)]
+type State = [(String, Const)]
 
 createEmptyState :: State
 createEmptyState = []
 
+mySort :: Ord a => [(a, b)] -> [(a, b)]
+mySort = sortBy (compare `on` fst)
+
 state2Str :: State -> String
-state2Str [(variable, value)] = variable ++ "=" ++ show value
-state2Str ((variable, value) : xs) = variable ++ "=" ++ show value ++ "," ++ state2Str xs
+state2Str [] = "The storage is empty"
+state2Str [(variable, Int x)] = variable ++ "=" ++ show x
+state2Str [(variable, TT)] = variable ++ "=True"
+state2Str [(variable, FF)] = variable ++ "=False"
+state2Str ((variable, Int x) : xs) = variable ++ "=" ++ show x ++ "," ++ state2Str xs
+state2Str ((variable, TT) : xs) = variable ++ "=True," ++ state2Str xs
+state2Str ((variable, FF) : xs) = variable ++ "=False," ++ state2Str xs
 
 -- TODO: Acrescentar os restantes tipos de codigo ao run
 
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
-run ((Push n : xs), stack, state) = run (xs, n : stack, state)
+run ((Push n : xs), stack, state) = run (xs, Int n : stack, state)
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
