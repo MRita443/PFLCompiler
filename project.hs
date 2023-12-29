@@ -27,7 +27,7 @@ createEmptyStack :: Stack
 createEmptyStack = []
 
 stack2Str :: Stack -> String
-stack2Str [] = "The stack is empty"
+stack2Str [] = ""
 stack2Str [Int x] = show x
 stack2Str [TT] = "True"
 stack2Str [FF] = "False"
@@ -44,7 +44,7 @@ mySort :: Ord a => [(a, b)] -> [(a, b)]
 mySort = sortBy (compare `on` fst)
 
 state2Str :: State -> String
-state2Str [] = "The storage is empty"
+state2Str [] = ""
 state2Str [(variable, Int x)] = variable ++ "=" ++ show x
 state2Str [(variable, TT)] = variable ++ "=True"
 state2Str [(variable, FF)] = variable ++ "=False"
@@ -57,6 +57,28 @@ state2Str ((variable, FF) : xs) = variable ++ "=False," ++ state2Str xs
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
 run ((Push n : xs), stack, state) = run (xs, Int n : stack, state)
+run ((Add : xs), Int n1 : Int n2 : stack, state) = run (xs, Int (n1 + n2) : stack, state)
+run ((Mult : xs), Int n1 : Int n2 : stack, state) = run (xs, Int (n1 * n2) : stack, state)
+run ((Sub : xs), Int n1 : Int n2 : stack, state) = run (xs, Int (n1 - n2) : stack, state)
+run ((Tru : xs), stack, state) = run (xs, TT : stack, state)
+run ((Fals : xs), stack, state) = run (xs, FF : stack, state)
+run ((Equ : xs), Int n1 : Int n2 : stack, state)
+  | n1 == n2 = run (xs, TT : stack, state)
+  | otherwise = run (xs, FF : stack, state)
+run ((Equ : xs), TT : TT : stack, state) = run (xs, TT : stack, state)
+run ((Equ : xs), TT : FF : stack, state) = run (xs, FF : stack, state)
+run ((Equ : xs), FF : TT : stack, state) = run (xs, FF : stack, state)
+run ((Equ : xs), FF : FF : stack, state) = run (xs, TT : stack, state)
+run ((Le : xs), Int n1 : Int n2 : stack, state)
+  | n1 >= n2 = run (xs, TT : stack, state)
+  | otherwise = run (xs, FF : stack, state)
+run ((And : xs), TT : TT : stack, state) = run (xs, TT : stack, state)
+run ((And : xs), TT : FF : stack, state) = run (xs, FF : stack, state)
+run ((And : xs), FF : TT : stack, state) = run (xs, FF : stack, state)
+run ((And : xs), FF : FF : stack, state) = run (xs, FF : stack, state)
+run ((Neg : xs), TT : stack, state) = run (xs, FF : stack, state)
+run ((Neg : xs), FF : stack, state) = run (xs, TT : stack, state)
+
 
 -- To help you test your assembler
 testAssembler :: Code -> (String, String)
