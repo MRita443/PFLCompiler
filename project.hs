@@ -103,6 +103,10 @@ run (Fetch x : xs, stack, state) =
         Just val -> run (xs, val : stack, state)
         Nothing -> error $ "Run-time error"
 run (Store x : xs, val : stack, state) = run (xs, stack, Map.insert x val state)
+run (Noop : xs, stack, state) = run (xs, stack, state)
+run (Branch c1 c2 : xs, TT : stack, state) = run (c1 ++ xs, stack, state)
+run (Branch c1 c2 : xs, FF : stack, state) = run (c2 ++ xs, stack, state)
+run (Loop c1 c2 : xs, stack, state) = run (c1 ++ [Branch (c2 ++ [Loop c1 c2]) [Noop]] ++ xs, stack, state)
 run (_, _, _) = error $ "Run-time error"
 
 -- To help you test your assembler
