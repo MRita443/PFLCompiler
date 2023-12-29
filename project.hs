@@ -101,7 +101,7 @@ run (Neg : xs, FF : stack, state) = run (xs, TT : stack, state)
 run (Fetch x : xs, stack, state) = 
     case Map.lookup x state of
         Just val -> run (xs, val : stack, state)
-        Nothing -> error $ "Variable '" ++ x ++ "' not found in state"
+        Nothing -> error $ "Run-time error"
 run (Store x : xs, val : stack, state) = run (xs, stack, Map.insert x val state)
 run (_, _, _) = error $ "Run-time error"
 
