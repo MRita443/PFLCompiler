@@ -5,7 +5,7 @@ import Data.Either ()
 import Data.Function (on)
 import Data.List (intercalate, sortBy)
 import Data.Map (Map)
-import Data.Map qualified as Map
+import qualified Data.Map as Map
 import Debug.Trace (trace)
 
 -- PFL 2023/24 - Haskell practical assignment quickstart
@@ -37,7 +37,6 @@ type Code = [Inst]
 data BoolConst = TT | FF deriving (Eq)
 
 instance Show BoolConst where
-  show :: BoolConst -> String
   show TT = "True"
   show FF = "False"
 
@@ -54,7 +53,6 @@ data Const
   | BoolConst BoolConst
 
 instance Show Const where
-  show :: Const -> String
   show (Int a) = show a
   show (BoolConst x) = show x
 
@@ -155,6 +153,7 @@ compA (AddLit a1 a2) = compA a1 ++ compA a2 ++ [Add]
 compA (MultLit a1 a2) = compA a1 ++ compA a2 ++ [Mult]
 compA (SubLit a1 a2) = compA a1 ++ compA a2 ++ [Sub]
 compA (NumLit a1) = [Push a1]
+compA (VarLit a1) = [Fetch a1]
 
 compB :: Bexp -> Code
 compB (IntEqLit a1 a2) = compA a1 ++ compA a2 ++ [Equ]
@@ -165,8 +164,26 @@ compB (NegLit b1) = compB b1 ++ [Neg]
 compB TrueLit = [Tru]
 compB FalseLit = [Fals]
 
--- compile :: Program -> Code
--- compile = compBool (Code)
+compileStm :: Stm -> Code
+compileStm (AtrLit variable exp) =
+  case exp of
+    Left aExp -> compA aExp ++ [Store variable]
+    Right bExp -> compB bExp ++ [Store variable]
+compileStm (WhileLit bExp body) =
+  let bodyCode = compile body
+      condCode = compB bExp
+  in condCode ++ [Loop bodyCode (compileStm (WhileLit bExp body))]
+compileStm (IfLit condStmt thenStmt maybeElseStmt) =
+  let thenCode = compile thenStmt
+      elseCode = case maybeElseStmt of
+        Nothing -> []
+        Just els -> compile els
+      condCode = compB condStmt
+  in condCode ++ [Branch thenCode elseCode]
+
+compile :: Program -> Code
+compile [] = []
+compile (x : xs) = compileStm x ++ compile xs
 
 data Token
   = PlusTok
@@ -439,9 +456,9 @@ parseStatements tokens =
 -- TODO: Ver caso em que só se fornece um parenteses de fecho
 
 -- To help you test your parser
-{- testParser :: String -> (String, String)
+testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
-  where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState) -}
+  where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
