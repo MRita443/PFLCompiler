@@ -172,7 +172,7 @@ compileStm (AtrLit variable exp) =
 compileStm (WhileLit bExp body) =
   let bodyCode = compile body
       condCode = compB bExp
-  in condCode ++ [Loop bodyCode (compileStm (WhileLit bExp body))]
+  in condCode ++ [Loop bodyCode condCode]
 compileStm (IfLit condStmt thenStmt maybeElseStmt) =
   let thenCode = compile thenStmt
       elseCode = case maybeElseStmt of
