@@ -34,15 +34,29 @@ data Inst
 
 type Code = [Inst]
 
-data Const
-  = Int Integer
-  | TT
-  | FF
+data BoolConst = TT | FF deriving (Eq)
 
-instance Show Const where
-  show (Int a) = show a
+instance Show BoolConst where
+  show :: BoolConst -> String
   show TT = "True"
   show FF = "False"
+
+and :: BoolConst -> BoolConst -> BoolConst
+and TT TT = TT
+and _ _ = FF
+
+neg :: BoolConst -> BoolConst
+neg TT = FF
+neg FF = TT
+
+data Const
+  = Int Integer
+  | BoolConst BoolConst
+
+instance Show Const where
+  show :: Const -> String
+  show (Int a) = show a
+  show (BoolConst x) = show x
 
 type Stack = [Const]
 
@@ -64,11 +78,7 @@ state2Str state
   | Map.null state = ""
   | otherwise = removeTrailingComma $ intercalate "," $ Map.foldrWithKey accumulate [] state
   where
-    accumulate key value acc =
-      case value of
-        Int x -> (key ++ "=" ++ show x) : acc
-        TT -> (key ++ "=" ++ show TT) : acc
-        FF -> (key ++ "=" ++ show FF) : acc
+    accumulate key value acc = (key ++ "=" ++ show value) : acc
     removeTrailingComma str =
       if not (null str) && last str == ','
         then init str
@@ -80,32 +90,28 @@ run (Push n : xs, stack, state) = run (xs, Int n : stack, state)
 run (Add : xs, Int n1 : Int n2 : stack, state) = run (xs, Int (n1 + n2) : stack, state)
 run (Mult : xs, Int n1 : Int n2 : stack, state) = run (xs, Int (n1 * n2) : stack, state)
 run (Sub : xs, Int n1 : Int n2 : stack, state) = run (xs, Int (n1 - n2) : stack, state)
-run (Tru : xs, stack, state) = run (xs, TT : stack, state)
-run (Fals : xs, stack, state) = run (xs, FF : stack, state)
+run (Tru : xs, stack, state) = run (xs, BoolConst TT : stack, state)
+run (Fals : xs, stack, state) = run (xs, BoolConst FF : stack, state)
 run (Equ : xs, Int n1 : Int n2 : stack, state)
-  | n1 == n2 = run (xs, TT : stack, state)
-  | otherwise = run (xs, FF : stack, state)
-run (Equ : xs, TT : TT : stack, state) = run (xs, TT : stack, state)
-run (Equ : xs, TT : FF : stack, state) = run (xs, FF : stack, state)
-run (Equ : xs, FF : TT : stack, state) = run (xs, FF : stack, state)
-run (Equ : xs, FF : FF : stack, state) = run (xs, TT : stack, state)
+  | n1 == n2 = run (xs, BoolConst TT : stack, state)
+  | otherwise = run (xs, BoolConst FF : stack, state)
+run (Equ : xs, BoolConst x : BoolConst y : stack, state) =
+  if x == y
+    then run (xs, BoolConst TT : stack, state)
+    else run (xs, BoolConst FF : stack, state)
 run (Le : xs, Int n1 : Int n2 : stack, state)
-  | n1 <= n2 = run (xs, TT : stack, state)
-  | otherwise = run (xs, FF : stack, state)
-run (And : xs, TT : TT : stack, state) = run (xs, TT : stack, state)
-run (And : xs, TT : FF : stack, state) = run (xs, FF : stack, state)
-run (And : xs, FF : TT : stack, state) = run (xs, FF : stack, state)
-run (And : xs, FF : FF : stack, state) = run (xs, FF : stack, state)
-run (Neg : xs, TT : stack, state) = run (xs, FF : stack, state)
-run (Neg : xs, FF : stack, state) = run (xs, TT : stack, state)
+  | n1 <= n2 = run (xs, BoolConst TT : stack, state)
+  | otherwise = run (xs, BoolConst FF : stack, state)
+run (And : xs, BoolConst x : BoolConst y : stack, state) = run (xs, BoolConst (Project.and x y) : stack, state)
+run (Neg : xs, BoolConst x : stack, state) = run (xs, BoolConst (Project.neg x) : stack, state)
 run (Fetch x : xs, stack, state) =
   case Map.lookup x state of
     Just val -> run (xs, val : stack, state)
     Nothing -> error "Run-time error"
 run (Store x : xs, val : stack, state) = run (xs, stack, Map.insert x val state)
 run (Noop : xs, stack, state) = run (xs, stack, state)
-run (Branch c1 c2 : xs, TT : stack, state) = run (c1 ++ xs, stack, state)
-run (Branch c1 c2 : xs, FF : stack, state) = run (c2 ++ xs, stack, state)
+run (Branch c1 c2 : xs, BoolConst TT : stack, state) = run (c1 ++ xs, stack, state)
+run (Branch c1 c2 : xs, BoolConst FF : stack, state) = run (c2 ++ xs, stack, state)
 run (Loop c1 c2 : xs, stack, state) = run (c1 ++ [Branch (c2 ++ [Loop c1 c2]) [Noop]] ++ xs, stack, state)
 run (_, _, _) = error "Run-time error"
 
@@ -133,8 +139,6 @@ testAssembler code = (stack2Str stack, state2Str state)
 -- You should get an exception with the string: "Run-time error"
 
 -- Part 2
-
--- TODO: Define the types Aexp, Bexp, Stm and Program
 
 data Aexp = AddLit Aexp Aexp | MultLit Aexp Aexp | SubLit Aexp Aexp | NumLit Integer | VarLit String deriving (Show) -- Este tipos são da linguagem high level
 
