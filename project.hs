@@ -290,6 +290,11 @@ parseSum tokens =
         Just (expr2, restTokens2) ->
           Just (AddLit expr1 expr2, restTokens2)
         Nothing -> Nothing
+    Just (expr1, MinusTok : restTokens1) ->
+      case parseSum restTokens1 of
+        Just (expr2, restTokens2) ->
+          Just (SubLit expr1 expr2, restTokens2)
+        Nothing -> Nothing
     result -> trace ("parseSum: " ++ show result ++ "\n") result
 
 parseLessOrIntEq :: [Token] -> Maybe (Bexp, [Token])
