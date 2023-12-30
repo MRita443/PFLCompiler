@@ -1,12 +1,12 @@
 module Project where
 
-import Data.Char ( isAlpha, isDigit, isSpace )
+import Data.Char (isAlpha, isDigit, isSpace)
 import Data.Either ()
-import Data.List (sortBy, intercalate)
-import Debug.Trace ( trace )
 import Data.Function (on)
+import Data.List (intercalate, sortBy)
 import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
+import Debug.Trace (trace)
 
 -- PFL 2023/24 - Haskell practical assignment quickstart
 -- Updated on 27/12/2023
@@ -52,7 +52,7 @@ createEmptyStack = []
 stack2Str :: Stack -> String
 stack2Str [] = ""
 stack2Str [x] = show x
-stack2Str (x : xs) =  show x ++ "," ++ stack2Str xs
+stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
 
 type State = Map String Const
 
@@ -61,18 +61,18 @@ createEmptyState = Map.empty
 
 state2Str :: State -> String
 state2Str state
-    | Map.null state = ""
-    | otherwise = removeTrailingComma $ intercalate "," $ Map.foldrWithKey accumulate [] state
-    where
-        accumulate key value acc =
-            case value of
-                Int x -> (key ++ "=" ++ show x) : acc
-                TT -> (key ++ "=" ++ show TT) : acc
-                FF -> (key ++ "=" ++ show FF) : acc
-        removeTrailingComma str =
-            if not (null str) && last str == ','
-                then init str
-                else str
+  | Map.null state = ""
+  | otherwise = removeTrailingComma $ intercalate "," $ Map.foldrWithKey accumulate [] state
+  where
+    accumulate key value acc =
+      case value of
+        Int x -> (key ++ "=" ++ show x) : acc
+        TT -> (key ++ "=" ++ show TT) : acc
+        FF -> (key ++ "=" ++ show FF) : acc
+    removeTrailingComma str =
+      if not (null str) && last str == ','
+        then init str
+        else str
 
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
@@ -99,9 +99,9 @@ run (And : xs, FF : FF : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, TT : stack, state) = run (xs, FF : stack, state)
 run (Neg : xs, FF : stack, state) = run (xs, TT : stack, state)
 run (Fetch x : xs, stack, state) =
-    case Map.lookup x state of
-        Just val -> run (xs, val : stack, state)
-        Nothing -> error "Run-time error"
+  case Map.lookup x state of
+    Just val -> run (xs, val : stack, state)
+    Nothing -> error "Run-time error"
 run (Store x : xs, val : stack, state) = run (xs, stack, Map.insert x val state)
 run (Noop : xs, stack, state) = run (xs, stack, state)
 run (Branch c1 c2 : xs, TT : stack, state) = run (c1 ++ xs, stack, state)
@@ -252,18 +252,13 @@ Parsing Order (Reverse of priority)
 -}
 
 parse :: String -> Program
-parse = parse
+parse input = parseTokens (lexer input) []
 
-{- parse :: [Token] -> Program
-parse tokens =
-  case parseSum tokens of
-    Just (expr, []) -> expr
-    _ -> error "Parse error" -}
-
-parseA :: [Token] -> Aexp
-parseA tokens =
-  case parseSum tokens of
-    Just (expr, []) -> expr
+parseTokens :: [Token] -> Program -> Program
+parseTokens [] currProgram = currProgram
+parseTokens tokens currProgram =
+  case parseStatement tokens of
+    Just (lits, rest) -> trace ("parseTokens: " ++ show rest ++ "\n") (parseTokens rest (currProgram ++ [lits]))
     _ -> error "Parse error"
 
 parseIntPar :: [Token] -> Maybe (Aexp, [Token])
@@ -273,7 +268,7 @@ parseIntPar (OpenParTok : restTokens1) =
   case parseSum restTokens1 of
     Just (expr, CloseParTok : restTokens2) ->
       Just (expr, restTokens2)
-    Just x -> trace ("parseIntPar: " ++ show x) error "Syntax Error: Missing closing parenthesis" -- TODO: Error no closing paren
+    Just x -> trace ("parseIntPar: " ++ show x) error "Syntax Error: Missing closing parenthesis"
     Nothing -> Nothing
 parseIntPar tokens = trace (show tokens) Nothing
 
@@ -453,7 +448,7 @@ testParser programCode = (stack2Str stack, state2Str state)
 -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
 -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
 
-{- 
+{-
 Regras assumidas sobre a linguagem:
 
 - -}
