@@ -149,17 +149,17 @@ type Program = [Stm]
 -- TODO: Switch Aexps for parseA
 
 compA :: Aexp -> Code
-compA (AddLit a1 a2) = compA a1 ++ compA a2 ++ [Add]
-compA (MultLit a1 a2) = compA a1 ++ compA a2 ++ [Mult]
-compA (SubLit a1 a2) = compA a1 ++ compA a2 ++ [Sub]
+compA (AddLit a1 a2) = compA a2 ++ compA a1 ++ [Add]
+compA (MultLit a1 a2) = compA a2 ++ compA a1 ++ [Mult]
+compA (SubLit a1 a2) = compA a2 ++ compA a1 ++ [Sub]
 compA (NumLit a1) = [Push a1]
 compA (VarLit a1) = [Fetch a1]
 
 compB :: Bexp -> Code
-compB (IntEqLit a1 a2) = compA a1 ++ compA a2 ++ [Equ]
-compB (BoolEqLit b1 b2) = compB b1 ++ compB b2 ++ [Equ]
-compB (LessEqLit a1 a2) = compA a1 ++ compA a2 ++ [Le]
-compB (AndLit b1 b2) = compB b1 ++ compB b2 ++ [And]
+compB (IntEqLit a1 a2) = compA a2 ++ compA a1 ++ [Equ]
+compB (BoolEqLit b1 b2) = compB b2 ++ compB b1 ++ [Equ]
+compB (LessEqLit a1 a2) = compA a2 ++ compA a1 ++ [Le]
+compB (AndLit b1 b2) = compB b2 ++ compB b1 ++ [And]
 compB (NegLit b1) = compB b1 ++ [Neg]
 compB TrueLit = [Tru]
 compB FalseLit = [Fals]
