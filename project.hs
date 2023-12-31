@@ -172,13 +172,13 @@ compileStm (AtrLit variable exp) =
 compileStm (WhileLit bExp body) =
   let bodyCode = compile body
       condCode = compB bExp
-  in condCode ++ [Loop bodyCode condCode]
-compileStm (IfLit condStmt thenStmt maybeElseStmt) =
-  let thenCode = compile thenStmt
-      elseCode = case maybeElseStmt of
+  in [Loop condCode bodyCode]
+compileStm (IfLit condStm thenStm maybeElseStm) =
+  let thenCode = compile thenStm
+      elseCode = case maybeElseStm of
         Nothing -> []
         Just els -> compile els
-      condCode = compB condStmt
+      condCode = compB condStm
   in condCode ++ [Branch thenCode elseCode]
 
 compile :: Program -> Code
