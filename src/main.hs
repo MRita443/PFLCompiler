@@ -5,7 +5,7 @@ import Data.Either ()
 import Data.Function (on)
 import Data.List (intercalate, sortBy)
 import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map qualified as Map
 import Debug.Trace (trace)
 
 -- PFL 2023/24 - Haskell practical assignment quickstart
@@ -58,9 +58,11 @@ instance Show Const where
 
 type Stack = [Const]
 
+-- | Creates an empty stack
 createEmptyStack :: Stack
 createEmptyStack = []
 
+-- | Converts a stack given as input to a string
 stack2Str :: Stack -> String
 stack2Str [] = ""
 stack2Str [x] = show x
@@ -68,9 +70,11 @@ stack2Str (x : xs) = show x ++ "," ++ stack2Str xs
 
 type State = Map String Const
 
+-- | Creates an empty storage
 createEmptyState :: State
 createEmptyState = Map.empty
 
+-- | Converts a storage given as input to a string
 state2Str :: State -> String
 state2Str state
   | Map.null state = ""
@@ -82,6 +86,7 @@ state2Str state
         then init str
         else str
 
+-- | Runs the list of instructions (Code) returning as ouput an empty code list, a stack and the output values in the storage
 run :: (Code, Stack, State) -> (Code, Stack, State)
 run ([], stack, state) = ([], stack, state)
 run (Push n : xs, stack, state) = run (xs, Int n : stack, state)
@@ -113,7 +118,7 @@ run (Branch c1 c2 : xs, BoolConst FF : stack, state) = run (c2 ++ xs, stack, sta
 run (Loop c1 c2 : xs, stack, state) = run (c1 ++ [Branch (c2 ++ [Loop c1 c2]) [Noop]] ++ xs, stack, state)
 run (_, _, _) = error "Run-time error"
 
--- To help you test your assembler
+-- | Helps test the assembler
 testAssembler :: Code -> (String, String)
 testAssembler code = (stack2Str stack, state2Str state)
   where
@@ -146,8 +151,7 @@ data Stm = WhileLit Bexp [Stm] | IfLit Bexp [Stm] (Maybe [Stm]) | AtrLit String 
 
 type Program = [Stm]
 
--- TODO: Switch Aexps for parseA
-
+-- | Compiles arithmetic expressions
 compA :: Aexp -> Code
 compA (AddLit a1 a2) = compA a2 ++ compA a1 ++ [Add]
 compA (MultLit a1 a2) = compA a2 ++ compA a1 ++ [Mult]
@@ -155,6 +159,7 @@ compA (SubLit a1 a2) = compA a2 ++ compA a1 ++ [Sub]
 compA (NumLit a1) = [Push a1]
 compA (VarLit a1) = [Fetch a1]
 
+-- | Compiles boolean expressions
 compB :: Bexp -> Code
 compB (IntEqLit a1 a2) = compA a2 ++ compA a1 ++ [Equ]
 compB (BoolEqLit b1 b2) = compB b2 ++ compB b1 ++ [Equ]
@@ -164,6 +169,7 @@ compB (NegLit b1) = compB b1 ++ [Neg]
 compB TrueLit = [Tru]
 compB FalseLit = [Fals]
 
+-- | Auxiliary function to compile statements
 compileStm :: Stm -> Code
 compileStm (AtrLit variable exp) =
   case exp of
@@ -172,24 +178,21 @@ compileStm (AtrLit variable exp) =
 compileStm (WhileLit bExp body) =
   let bodyCode = compile body
       condCode = compB bExp
-  in [Loop condCode bodyCode]
+   in [Loop condCode bodyCode]
 compileStm (IfLit condStm thenStm maybeElseStm) =
   let thenCode = compile thenStm
-      elseCode = case maybeElseStm of
-        Nothing -> []
-        Just els -> compile els
+      elseCode = maybe [] compile maybeElseStm
       condCode = compB condStm
-  in condCode ++ [Branch thenCode elseCode]
+   in condCode ++ [Branch thenCode elseCode]
 
+-- | Main compiler function
 compile :: Program -> Code
-compile [] = []
-compile (x : xs) = compileStm x ++ compile xs
+compile = concatMap compileStm
 
 data Token
   = PlusTok
   | TimesTok
   | MinusTok
-  | DivTok
   | OpenParTok
   | CloseParTok
   | IfTok
@@ -199,10 +202,7 @@ data Token
   | DoTok
   | AtrTok
   | IntEqTok
-  | LessTok
   | LessEqTok
-  | GreaterTok
-  | GreaterEqTok
   | NegTok
   | AndTok
   | BoolEqTok
@@ -213,6 +213,7 @@ data Token
   | VarTok String
   deriving (Show, Eq)
 
+-- | Tokenizes a string
 lexer :: String -> [Token]
 lexer [] = []
 lexer (c : cs)
@@ -221,6 +222,7 @@ lexer (c : cs)
   | isSpace c = lexer cs
   | otherwise = lexSymbol (c : cs)
 
+-- | Tokenizes a word
 lexWord :: String -> [Token]
 lexWord cs = case span isAlpha cs of
   ("if", rest) -> IfTok : lexer rest
@@ -234,29 +236,28 @@ lexWord cs = case span isAlpha cs of
   ("False", rest) -> FalseTok : lexer rest
   (var, rest) -> VarTok var : lexer rest
 
+-- | Tokenizes a number
 lexNum :: String -> [Token]
 lexNum cs = IntTok (read num) : lexer rest
   where
     (num, rest) = span isDigit cs
 
+-- | Tokenizes a negative number
 lexNegNum :: String -> [Token]
 lexNegNum cs = IntTok (-(read num)) : lexer rest
   where
     (num, rest) = span isDigit cs
 
+-- | Tokenizes a symbol
 lexSymbol :: String -> [Token]
 lexSymbol ('=' : '=' : cs) = IntEqTok : lexer cs
 lexSymbol (':' : '=' : cs) = AtrTok : lexer cs
 lexSymbol ('<' : '=' : cs) = LessEqTok : lexer cs
-lexSymbol ('>' : '=' : cs) = GreaterEqTok : lexer cs
 lexSymbol ('(' : '-' : cs) = OpenParTok : lexNegNum cs
 lexSymbol (c : cs) = case c of
-  '<' -> LessTok : lexer cs
-  '>' -> GreaterTok : lexer cs
   '+' -> PlusTok : lexer cs
   '-' -> MinusTok : lexer cs
   '*' -> TimesTok : lexer cs
-  '/' -> DivTok : lexer cs
   '=' -> BoolEqTok : lexer cs
   '(' -> OpenParTok : lexer cs
   ')' -> CloseParTok : lexer cs
@@ -268,41 +269,46 @@ lexSymbol (c : cs) = case c of
 Parsing Order (Reverse of priority)
  #Each function calls the next one so higher priority operations are done first
 
- - Numerical Expressions: Sum/Subtraction -> Product/Division -> Integer/Parentheses
+ - Numerical Expressions: Sum/Subtraction -> Product -> Integer/Variables/Parentheses
  - Boolean Expressions: And -> Boolean Equality -> Not -> Integer Equality/Integer Inequality
 -}
 
+-- | Parses a program language string into literals
 parse :: String -> Program
 parse input = parseTokens (lexer input) []
 
+-- | Parses a list of tokens
 parseTokens :: [Token] -> Program -> Program
 parseTokens [] currProgram = currProgram
 parseTokens tokens currProgram =
   case parseStatement tokens of
-    Just (lits, rest) -> trace ("parseTokens: " ++ show rest ++ "\n") (parseTokens rest (currProgram ++ [lits]))
+    Just (lits, rest) -> parseTokens rest (currProgram ++ [lits])
     _ -> error "Parse error"
 
-parseIntPar :: [Token] -> Maybe (Aexp, [Token])
-parseIntPar (IntTok n : restTokens) = Just (NumLit n, restTokens)
-parseIntPar (VarTok x : restTokens) = Just (VarLit x, restTokens)
-parseIntPar (OpenParTok : restTokens1) =
+-- | Parses integer, variable or parenthesis tokens
+parseIntVarPar :: [Token] -> Maybe (Aexp, [Token])
+parseIntVarPar (IntTok n : restTokens) = Just (NumLit n, restTokens)
+parseIntVarPar (VarTok x : restTokens) = Just (VarLit x, restTokens)
+parseIntVarPar (OpenParTok : restTokens1) =
   case parseSum restTokens1 of
     Just (expr, CloseParTok : restTokens2) ->
       Just (expr, restTokens2)
-    Just x -> trace ("parseIntPar: " ++ show x) error "Syntax Error: Missing closing parenthesis"
+    Just x -> error "Syntax Error: Missing closing parenthesis"
     Nothing -> Nothing
-parseIntPar tokens = trace (show tokens) Nothing
+parseIntVarPar tokens = Nothing
 
+-- | Parses product tokens
 parseProd :: [Token] -> Maybe (Aexp, [Token])
 parseProd tokens =
-  case parseIntPar tokens of
+  case parseIntVarPar tokens of
     Just (expr1, TimesTok : restTokens1) ->
       case parseProd restTokens1 of
         Just (expr2, restTokens2) ->
           Just (MultLit expr1 expr2, restTokens2)
         Nothing -> Nothing
-    result -> trace ("parseProd: " ++ show result ++ "\n") result
+    result -> result
 
+-- | Parses sum tokens
 parseSum :: [Token] -> Maybe (Aexp, [Token])
 parseSum tokens =
   case parseProd tokens of
@@ -316,18 +322,19 @@ parseSum tokens =
         Just (expr2, restTokens2) ->
           Just (SubLit expr1 expr2, restTokens2)
         Nothing -> Nothing
-    result -> trace ("parseSum: " ++ show result ++ "\n") result
+    result -> result
 
-parseLessOrIntEq :: [Token] -> Maybe (Bexp, [Token])
-parseLessOrIntEq (TrueTok : restTokens) = Just (TrueLit, restTokens)
-parseLessOrIntEq (FalseTok : restTokens) = Just (FalseLit, restTokens)
-parseLessOrIntEq (OpenParTok : restTokens) =
+-- | Parses integer comparison tokens
+parseLessEqBools :: [Token] -> Maybe (Bexp, [Token])
+parseLessEqBools (TrueTok : restTokens) = Just (TrueLit, restTokens)
+parseLessEqBools (FalseTok : restTokens) = Just (FalseLit, restTokens)
+parseLessEqBools (OpenParTok : restTokens) =
   case parseAnd restTokens of
     Just (expr, CloseParTok : restTokens2) ->
       Just (expr, restTokens2)
-    Just x -> trace ("parsePar: " ++ show x ++ "\n") error "Syntax Error: Missing closing parenthesis" -- TODO: Error no closing paren
+    Just x -> error "Syntax Error: Missing closing parenthesis"
     Nothing -> Nothing
-parseLessOrIntEq tokens =
+parseLessEqBools tokens =
   case parseSum tokens of
     Just (expr1, LessEqTok : restTokens1) ->
       case parseSum restTokens1 of
@@ -339,16 +346,18 @@ parseLessOrIntEq tokens =
         Just (expr2, restTokens2) ->
           Just (IntEqLit expr1 expr2, restTokens2)
         Nothing -> Nothing
-    result -> trace ("parseLessOrIntEq: " ++ show result ++ "\n") Nothing
+    result -> Nothing
 
+-- | Parses negation tokens
 parseNeg :: [Token] -> Maybe (Bexp, [Token])
 parseNeg (NegTok : restTokens) =
-  case parseLessOrIntEq restTokens of
+  case parseLessEqBools restTokens of
     Just (expr1, restTokens1) ->
       Just (NegLit expr1, restTokens1)
-    result -> trace ("parseNeg: " ++ show result ++ "\n") result
-parseNeg tokens = parseLessOrIntEq tokens
+    result -> result
+parseNeg tokens = parseLessEqBools tokens
 
+-- | Parses boolean equality tokens
 parseBoolEq :: [Token] -> Maybe (Bexp, [Token])
 parseBoolEq tokens =
   case parseNeg tokens of
@@ -357,8 +366,9 @@ parseBoolEq tokens =
         Just (expr2, restTokens2) ->
           Just (BoolEqLit expr1 expr2, restTokens2)
         Nothing -> Nothing
-    result -> trace ("parseBoolEq: " ++ show result ++ "\n") result
+    result -> result
 
+-- | Parses and tokens
 parseAnd :: [Token] -> Maybe (Bexp, [Token])
 parseAnd tokens =
   case parseBoolEq tokens of
@@ -367,8 +377,9 @@ parseAnd tokens =
         Just (expr2, restTokens2) ->
           Just (AndLit expr1 expr2, restTokens2)
         Nothing -> Nothing
-    result -> trace ("parseAnd: " ++ show result ++ "\n") result
+    result -> result
 
+-- | Parses the code block relative to an else statement
 parseElse :: [Token] -> Bexp -> [Stm] -> Maybe (Stm, [Token])
 parseElse tokens boolExpr thenStms =
   case parseStatements tokens of
@@ -378,8 +389,9 @@ parseElse tokens boolExpr thenStms =
       if length elseStms == 1
         then Just (IfLit boolExpr thenStms (Just elseStms), restTokens2) -- If there is only one statement inside else, we do not need an else specific delimiter
         else error "Syntax Error: Missing delimiter after else statement" -- If there is more than one statement, it is an error
-    Nothing -> trace "parseStatement: AfterElse \n" Nothing
+    Nothing -> Nothing
 
+-- | Parses the code block relative to a then (and possible else) statement
 parseThen :: [Token] -> Bexp -> Maybe (Stm, [Token])
 parseThen tokens boolExpr =
   case parseStatements tokens of
@@ -395,8 +407,9 @@ parseThen tokens boolExpr =
       if length thenStms == 1
         then Just (IfLit boolExpr thenStms Nothing, restTokens) -- If there is only one statement inside then, we do not need a do specific delimiter
         else error "Syntax Error: Missing delimiter after then statement" -- If there is more than one statement, it is an error
-    Nothing -> trace ("parseStatement: AfterThen " ++ show tokens ++ "\n") Nothing
+    Nothing -> Nothing
 
+-- | Parses a single statement
 parseStatement :: [Token] -> Maybe (Stm, [Token])
 parseStatement (WhileTok : restTokens) =
   -- Could have chosen to enforce the need for parentheses after while and do, but chose not to
@@ -417,7 +430,7 @@ parseStatement (IfTok : restTokens) =
   case parseAnd restTokens of
     Just (boolExpr, ThenTok : restTokens1) ->
       parseThen restTokens1 boolExpr
-    result -> trace ("parseStatement: " ++ show result ++ "\n") error "Syntax Error: Missing then statement after if"
+    result -> error "Syntax Error: Missing then statement after if"
 parseStatement (VarTok x : AtrTok : restTokens) =
   case parseSum restTokens of
     Just (aExp, DelimTok : restTokens1) ->
@@ -437,7 +450,7 @@ parseStatementsAux tokens currStms =
     Just (stms, CloseParTok : restTokens) ->
       -- Found the closing parenthesis delimiting the block's end
       Just (currStms ++ [stms], restTokens)
-    Just (stms1, restTokens1) -> trace ("parseStatementsAux: " ++ show restTokens1 ++ "\n") parseStatementsAux restTokens1 (currStms ++ [stms1])
+    Just (stms1, restTokens1) -> parseStatementsAux restTokens1 (currStms ++ [stms1])
     Nothing -> Nothing
 
 -- | Parses a block of (possibly) multiple statements
@@ -453,12 +466,11 @@ parseStatements tokens =
     Just (stm, restTokens) ->
       Just ([stm], restTokens) -- We chose not to check for ; here in order to get more comprehensive error messages from the parseStatements function
 
--- TODO: Ver caso em que só se fornece um parenteses de fecho
-
--- To help you test your parser
+-- | Helps test the parser
 testParser :: String -> (String, String)
 testParser programCode = (stack2Str stack, state2Str state)
-  where (_,stack,state) = run(compile (parse programCode), createEmptyStack, createEmptyState)
+  where
+    (_, stack, state) = run (compile (parse programCode), createEmptyStack, createEmptyState)
 
 -- Examples:
 -- testParser "x := 5; x := x - 1;" == ("","x=4")
@@ -473,8 +485,3 @@ testParser programCode = (stack2Str stack, state2Str state)
 -- testParser "if (1 == 0+1 = (2+1 == 4)) then x := 1; else x := 2;" == ("","x=2")
 -- testParser "x := 2; y := (x - 3)*(4 + 2*3); z := x +x*(2);" == ("","x=2,y=-10,z=6")
 -- testParser "i := 10; fact := 1; while (not(i == 1)) do (fact := fact * i; i := i - 1;);" == ("","fact=3628800,i=1")
-
-{-
-Regras assumidas sobre a linguagem:
-
-- -}
